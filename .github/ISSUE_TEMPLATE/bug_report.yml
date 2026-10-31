@@ -1,0 +1,36 @@
+name: Bug report
+description: Report a conversion, packaging, or runtime problem.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For security vulnerabilities, use the private reporting link instead.
+        Please do not upload purchased books, private metadata, or files you cannot redistribute.
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+    validations:
+      required: true
+  - type: textarea
+    id: runtime
+    attributes:
+      label: Runtime
+      description: Cloudflare compatibility date and plan, or browser/Node version; include OS for local tools.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Minimal code, steps, and a small synthetic EPUB fixture if possible.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+      description: Include error code/message and whether the error occurs before or during stream consumption.
+    validations:
+      required: true

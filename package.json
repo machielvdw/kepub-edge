@@ -1,0 +1,65 @@
+{
+  "name": "kepub-edge",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Streaming EPUB-to-KEPUB conversion for Cloudflare Workers and the web. Zero runtime dependencies.",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "VALIDATION.md",
+    "examples/worker/worker.ts",
+    "examples/worker/wrangler.jsonc",
+    "examples/worker/tsconfig.json",
+    "scripts/check-corpus.mjs"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "prepack": "npm run build",
+    "test": "npm run build && node --test tests/converter.test.mjs",
+    "test:package": "npm run build && node --test tests/package.test.mjs",
+    "test:worker": "npm run build && node scripts/test-worker.mjs",
+    "dev": "wrangler dev --config examples/worker/wrangler.jsonc --port 8791 --local",
+    "typecheck": "tsc --noEmit && tsc -p examples/worker/tsconfig.json",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "prettier": "3.9.10",
+    "typescript": "~6.0.2",
+    "wrangler": "4.156.0"
+  },
+  "license": "MIT",
+  "author": "Machiel (https://github.com/machielvdw)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/machielvdw/kepub-edge.git"
+  },
+  "homepage": "https://github.com/machielvdw/kepub-edge#readme",
+  "bugs": {
+    "url": "https://github.com/machielvdw/kepub-edge/issues"
+  },
+  "keywords": [
+    "epub",
+    "kepub",
+    "kobo",
+    "cloudflare-workers",
+    "edge",
+    "streaming",
+    "ebook",
+    "typescript"
+  ],
+  "engines": {
+    "node": ">=22.23.4"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

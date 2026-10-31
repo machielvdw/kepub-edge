@@ -1,0 +1,17 @@
+name: Feature request
+description: Suggest an improvement with a concrete use case.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior and alternatives
+      description: Include the intended runtime and any memory/CPU constraints.
+    validations:
+      required: true
