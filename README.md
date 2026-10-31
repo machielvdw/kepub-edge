@@ -16,9 +16,20 @@ transformed and compressed incrementally.
 - Browser Web Workers supporting raw-deflate Compression/DecompressionStream can
   use the same library; browser compatibility is not yet covered by CI.
 
-**Early preview:** source is available under MIT; the npm package has not been
-published yet. Real-book coverage, deployed CPU/memory benchmarks, and physical
-Kobo acceptance are still being established. See [validation](VALIDATION.md).
+**Early preview:** released under MIT. Real-book coverage, deployed CPU/memory
+benchmarks, and physical Kobo acceptance are still being established.
+See [validation](VALIDATION.md).
+
+## Install
+
+```sh
+npm install kepub-edge
+```
+
+The package provides ESM and TypeScript declarations. It has no runtime
+dependencies; consumers do not need TypeScript to execute the built JavaScript.
+See the API example below and the complete Cloudflare Worker example in
+[`examples/worker`](examples/worker/worker.ts).
 
 ## Get started from source
 
@@ -39,10 +50,8 @@ curl --fail-with-body --data-binary @book.epub \
   http://localhost:8791/ --output book.kepub.epub
 ```
 
-To use the library in another local project, run `npm pack` here and install the
-resulting `kepub-edge-0.1.0.tgz` there with `npm install /path/to/the/tarball.tgz`.
-The package contains built JavaScript and declarations; consumers do not need
-TypeScript to execute it.
+To test unpublished changes in another local project, run `npm pack` here and
+install the resulting tarball there with `npm install /path/to/the/tarball.tgz`.
 
 ## API
 
