@@ -9,7 +9,7 @@ import {
   writeFile,
 } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { test } from "node:test"
 import { makeEpub } from "./fixture.mjs"
@@ -78,7 +78,16 @@ test(
       const code: KepubErrorCode = new KepubError('invalid_epub', 'Example').code;
     `
       )
-      const tsc = fileURLToPath(import.meta.resolve("typescript/bin/tsc"))
+      const typescriptPackagePath = fileURLToPath(
+        import.meta.resolve("typescript/package.json")
+      )
+      const typescriptPackage = JSON.parse(
+        await readFile(typescriptPackagePath, "utf8")
+      )
+      const tsc = join(
+        dirname(typescriptPackagePath),
+        typescriptPackage.bin.tsc
+      )
       await writeFile(
         join(temp, "tsconfig.json"),
         JSON.stringify({
