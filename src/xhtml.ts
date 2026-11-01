@@ -117,21 +117,21 @@ function validateOpeningTag(
   tag: string,
   qname: string,
   allowNamedEntities: boolean
-): Map<string, string> {
-  const attributes = new Set<string>()
+): { attributes: Map<string, string>; declarations: Map<string, string> } {
+  const attributes = new Map<string, string>()
   const declarations = new Map<string, string>()
   let at = 1 + qname.length
   while (at < tag.length) {
     const before = at
     while (/[ \t\r\n]/u.test(tag[at] ?? "")) at++
-    if (tag[at] === ">" && at === tag.length - 1) return declarations
+    if (tag[at] === ">" && at === tag.length - 1)
+      return { attributes, declarations }
     if (tag[at] === "/" && tag[at + 1] === ">" && at === tag.length - 2)
-      return declarations
+      return { attributes, declarations }
     if (at === before) invalid("The XHTML has malformed XML attributes.")
     const match = /^[A-Za-z_][A-Za-z0-9_.:-]*/u.exec(tag.slice(at))
     if (!match || attributes.has(match[0]))
       invalid("The XHTML has malformed XML attributes.")
-    attributes.add(match[0])
     at += match[0].length
     while (/[ \t\r\n]/u.test(tag[at] ?? "")) at++
     if (tag[at] !== "=") invalid("The XHTML has malformed XML attributes.")
@@ -144,6 +144,7 @@ function validateOpeningTag(
     if (end < 0 || tag.slice(at + 1, end).includes("<"))
       invalid("The XHTML has malformed XML attributes.")
     validateText(tag.slice(at + 1, end), allowNamedEntities)
+    attributes.set(match[0], tag.slice(at + 1, end))
     if (match[0] === "xmlns" || match[0].startsWith("xmlns:"))
       declarations.set(
         match[0] === "xmlns" ? "" : match[0].slice(6),
@@ -188,6 +189,26 @@ function* sentencePieces(raw: string): Generator<string> {
 export async function* transformXhtml(
   source: AsyncIterable<Uint8Array>
 ): AsyncGenerator<Uint8Array> {
+  yield* processXhtml(source)
+}
+
+/** Validate the entire document before deciding whether its markup is ready. */
+export async function hasKoboSpans(
+  source: AsyncIterable<Uint8Array>
+): Promise<boolean> {
+  let found = false
+  for await (const _chunk of processXhtml(source, () => {
+    found = true
+  })) {
+    // Inspection emits no output and retains only the parser's bounded window.
+  }
+  return found
+}
+
+async function* processXhtml(
+  source: AsyncIterable<Uint8Array>,
+  onKoboSpan?: () => void
+): AsyncGenerator<Uint8Array> {
   const decoder = new TextDecoder("utf-8", { fatal: true })
   const stack: Frame[] = []
   let buffer = ""
@@ -229,6 +250,7 @@ export async function* transformXhtml(
     if (!stack.length && raw.trim())
       invalid("The XHTML has text outside its root element.")
     if (
+      onKoboSpan ||
       !inBody ||
       skipDepth ||
       stack.at(-1)?.namespace !== XHTML_NAMESPACE ||
@@ -282,19 +304,35 @@ export async function* transformXhtml(
       if (name === "body" && frame.namespace === XHTML_NAMESPACE) {
         if (!inBody) invalid("The XHTML body is malformed.")
         inBody = false
-        return `</${bodyPrefix}div></${bodyPrefix}div>` + tag
+        return onKoboSpan ? tag : `</${bodyPrefix}div></${bodyPrefix}div>` + tag
       }
       if (name === "html" && !stack.length) rootClosed = true
       if (inBody && (frame.namespace !== XHTML_NAMESPACE || skipped.has(name)))
         skipDepth--
       return tag
     }
-    const declarations = validateOpeningTag(tag, qname, allowNamedEntities)
+    const { attributes, declarations } = validateOpeningTag(
+      tag,
+      qname,
+      allowNamedEntities
+    )
     const namespace = namespaceFor(qname, declarations)
     const isXhtml = namespace === XHTML_NAMESPACE
     const selfClosing = /\/\s*>$/u.test(tag)
-    if (/\bclass\s*=\s*["'][^"']*\bkoboSpan\b/u.test(tag))
-      unsupported("This EPUB already contains Kobo spans.")
+    if (
+      inBody &&
+      isXhtml &&
+      name === "span" &&
+      attributes
+        .get("class")
+        ?.replace(/&(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-f]+);/giu, xmlAttribute)
+        .split(/\s+/u)
+        .includes("koboSpan")
+    ) {
+      if (!onKoboSpan) unsupported("This EPUB already contains Kobo spans.")
+      if (++spans > MAX_SPANS) tooLarge("The XHTML has too many Kobo spans.")
+      onKoboSpan()
+    }
     if (!stack.length) {
       if (rootOpened || name !== "html" || !isXhtml)
         invalid("The XHTML has an invalid root element.")
@@ -303,6 +341,7 @@ export async function* transformXhtml(
     if (stack.length >= MAX_DEPTH) tooLarge("The XHTML is nested too deeply.")
     if (
       inBody &&
+      !onKoboSpan &&
       isXhtml &&
       name === "img" &&
       selfClosing &&
@@ -320,6 +359,7 @@ export async function* transformXhtml(
       inBody = true
       sawBody = true
       bodyPrefix = prefix(qname)
+      if (onKoboSpan) return tag
       return (
         tag +
         `<${bodyPrefix}div id="book-columns"><${bodyPrefix}div id="book-inner">`
@@ -341,13 +381,15 @@ export async function* transformXhtml(
         if (!cut) break
         const chunk = buffer.slice(0, cut)
         buffer = buffer.slice(cut)
-        yield encoder.encode(textOutput(chunk))
+        const output = textOutput(chunk)
+        if (!onKoboSpan) yield encoder.encode(output)
         continue
       }
       if (markup > 0) {
         const chunk = buffer.slice(0, markup)
         buffer = buffer.slice(markup)
-        yield encoder.encode(textOutput(chunk))
+        const output = textOutput(chunk)
+        if (!onKoboSpan) yield encoder.encode(output)
         continue
       }
       const end = markupEnd(buffer)
@@ -361,7 +403,8 @@ export async function* transformXhtml(
       }
       const tag = buffer.slice(0, end)
       buffer = buffer.slice(end)
-      yield encoder.encode(tagOutput(tag))
+      const output = tagOutput(tag)
+      if (!onKoboSpan) yield encoder.encode(output)
     }
   }
 

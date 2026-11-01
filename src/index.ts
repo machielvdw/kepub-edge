@@ -7,12 +7,12 @@ import {
   readSmallEntry,
 } from "./zip.js"
 import { writeZip, type Replacement } from "./write-zip.js"
-import { transformXhtml } from "./xhtml.js"
+import { hasKoboSpans, transformXhtml } from "./xhtml.js"
 
 export { KepubError }
 export type { KepubErrorCode } from "./error.js"
 /** Bump when converted output semantics change; persisted with each variant. */
-export const KEPUB_CONVERTER_VERSION = "2"
+export const KEPUB_CONVERTER_VERSION = "3"
 
 /** Conservative collection cap; streaming output has a separate 128 MiB cap. */
 export const DEFAULT_MAX_BLOB_BYTES = 35 * 1024 * 1024
@@ -38,7 +38,13 @@ export async function convertEpubToKepub(
     const entry = archive.byName.get(path)
     if (!entry)
       throw new KepubError("invalid_epub", "A reading document is missing.")
-    replacements.set(path, () => transformXhtml(inflateEntry(archive, entry)))
+    replacements.set(path, async () =>
+      // Inspect every chapter fully, even after finding a Kobo span. Ready
+      // chapters retain their compressed bytes, markup, and reference IDs.
+      (await hasKoboSpans(inflateEntry(archive, entry)))
+        ? null
+        : transformXhtml(inflateEntry(archive, entry))
+    )
   }
   return writeZip(archive, replacements)
 }

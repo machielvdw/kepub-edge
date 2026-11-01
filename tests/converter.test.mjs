@@ -7,7 +7,7 @@ import {
   DEFAULT_MAX_BLOB_BYTES,
 } from "../dist/index.js"
 import { parseZip, readSmallEntry } from "../dist/zip.js"
-import { transformXhtml } from "../dist/xhtml.js"
+import { hasKoboSpans, transformXhtml } from "../dist/xhtml.js"
 import { makeEpub } from "./fixture.mjs"
 
 async function converted(source) {
@@ -22,6 +22,64 @@ async function text(archive, name) {
     await readSmallEntry(archive, entry, 50 * 1024 * 1024)
   )
 }
+
+test("preparing an existing KEPUB preserves every entry and its Kobo references", async () => {
+  const first = await converted(makeEpub({ withCover: true, navInSpine: true }))
+  const second = await converted(first.bytes)
+  for (const entry of first.entries) {
+    const after = second.byName.get(entry.name)
+    assert.ok(after)
+    assert.deepEqual(
+      second.bytes.subarray(after.dataStart, after.dataEnd),
+      first.bytes.subarray(entry.dataStart, entry.dataEnd),
+      entry.name
+    )
+  }
+})
+
+test("publisher KEPUB chapters without wrappers are preserved alongside plain chapters", async () => {
+  const source = makeEpub({
+    chapters: [
+      '<span class="extra koboSpan" id="kobo.8.2">Already ready.</span>',
+      "Still needs conversion.",
+    ],
+  })
+  const input = parseZip(source)
+  const output = await converted(source)
+  assert.equal(
+    await text(output, "OEBPS/chapter-1.xhtml"),
+    await text(input, "OEBPS/chapter-1.xhtml")
+  )
+  assert.match(await text(output, "OEBPS/chapter-2.xhtml"), /class="koboSpan"/)
+})
+
+test("Kobo detection parses real class tokens across tiny chunks", async () => {
+  for (const [body, expected] of [
+    ['<x:span class="other kobo&#83;pan" id="kobo.1.1">Ready.</x:span>', true],
+    ['<!-- <span class="koboSpan"/> --><x:p>Text.</x:p>', false],
+    ['<x:span data-class="koboSpan">Text.</x:span>', false],
+    ['<x:span class="not-koboSpan">Text.</x:span>', false],
+    ['<span xmlns="urn:foreign" class="koboSpan">Text.</span>', false],
+  ]) {
+    const bytes = Buffer.from(
+      `<x:html xmlns:x="http://www.w3.org/1999/xhtml"><x:body>${body}</x:body></x:html>`
+    )
+    async function* chunks() {
+      for (let at = 0; at < bytes.length; at += 3)
+        yield bytes.subarray(at, at + 3)
+    }
+    assert.equal(await hasKoboSpans(chunks()), expected, body)
+  }
+})
+
+test("a Kobo span does not bypass validation of the rest of a chapter or book", async () => {
+  const ready = '<span class="koboSpan" id="kobo.1.1">Ready.</span>'
+  for (const chapters of [[ready + "<b>Broken"], [ready, "<b>Broken"]]) {
+    await assert.rejects(convertEpubToKepubBlob(makeEpub({ chapters })), {
+      code: "invalid_epub",
+    })
+  }
+})
 
 test("EPUB 3 chapters gain Kobo spans while nav and compressed cover are unchanged", async () => {
   const source = makeEpub({
@@ -291,7 +349,7 @@ test("XHTML streaming keeps entities and inline markup across tiny input chunks"
 test("common XHTML doctype and named entities survive conversion", async () => {
   const original = `<?xml version="1.0"?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Test</title></head><body><p>A&nbsp;B. C.</p></body></html>`
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Test</title></head><body><p title="A&nbsp;B">A&nbsp;B. C.</p></body></html>`
   async function* input() {
     yield new TextEncoder().encode(original)
   }
@@ -300,4 +358,5 @@ test("common XHTML doctype and named entities survive conversion", async () => {
   const converted = new TextDecoder().decode(Buffer.concat(pieces))
   assert.match(converted, /<!DOCTYPE html PUBLIC/)
   assert.match(converted, /A&nbsp;B\. <\/span>/)
+  assert.match(converted, /title="A&nbsp;B"/)
 })
