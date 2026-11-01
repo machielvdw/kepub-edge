@@ -7,7 +7,8 @@ import {
   type ZipEntry,
 } from "./zip.js"
 
-export type Replacement = () => AsyncIterable<Uint8Array>
+export type Replacement = () =>
+  AsyncIterable<Uint8Array> | Promise<AsyncIterable<Uint8Array> | null>
 
 interface WrittenEntry {
   name: Uint8Array
@@ -117,7 +118,7 @@ export function writeZip(
       const directory = original.name.endsWith("/")
       const replacement = directory
         ? undefined
-        : replacements.get(original.name)
+        : await replacements.get(original.name)?.()
       const entry: WrittenEntry = {
         name: encodeName(original.name),
         method: directory ? 0 : replacement ? 8 : original.method,
@@ -139,7 +140,7 @@ export function writeZip(
         let sourceError: unknown
         const counted = async function* (): AsyncGenerator<Uint8Array> {
           try {
-            for await (const chunk of replacement()) {
+            for await (const chunk of replacement) {
               size += chunk.byteLength
               if (size > 50 * 1024 * 1024)
                 tooLarge("A converted KEPUB entry exceeds the allowed size.")

@@ -1,10 +1,43 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 import { makeEpub } from "./fixture.mjs"
+import { parseZip } from "../dist/zip.js"
 
 const base = process.env.KEPUB_WORKER_URL
 const workerTest = (name, fn) => test(name, { skip: !base }, fn)
 const convert = (body) => fetch(base, { method: "POST", body })
+
+workerTest("standalone Worker preserves existing KEPUB chapters", async () => {
+  const source = makeEpub({
+    chapters: [
+      '<span class="koboSpan" id="kobo.1.1">Already prepared.</span>',
+      "SVG cover",
+    ],
+    withCover: true,
+    transformChapter: (xhtml) =>
+      xhtml.includes("<title>Chapter 2</title>")
+        ? xhtml.replace(
+            /<body>.*<\/body>/su,
+            '<body><div id="book-columns"><div id="book-inner"><svg xmlns="http://www.w3.org/2000/svg"><image href="cover.png" width="1" height="1"/></svg></div></div></body>'
+          )
+        : xhtml,
+  })
+  const response = await convert(source)
+  assert.equal(response.status, 200)
+  assert.match(response.headers.get("Content-Disposition"), /book\.kepub\.epub/)
+  const output = new Uint8Array(await response.arrayBuffer())
+  const before = parseZip(source)
+  const after = parseZip(output)
+  for (const entry of before.entries) {
+    const next = after.byName.get(entry.name)
+    assert.ok(next)
+    assert.deepEqual(
+      output.subarray(next.dataStart, next.dataEnd),
+      new Uint8Array(source.subarray(entry.dataStart, entry.dataEnd)),
+      entry.name
+    )
+  }
+})
 
 workerTest(
   "standalone Worker converts a navigation page in the spine",

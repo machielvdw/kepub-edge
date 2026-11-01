@@ -70,7 +70,7 @@ must be positive safe integers no greater than 128 MiB; invalid values reject
 with `RangeError`. Larger overrides require a measured memory budget.
 
 `KEPUB_CONVERTER_VERSION` identifies output semantics for cached variants.
-Version `"2"` includes namespace handling and navigation pages in the spine.
+Version `"3"` also recognizes existing Kobo spans and preserves prepared chapters.
 
 ## Cloudflare Worker example
 
@@ -120,10 +120,16 @@ receives spans when it appears in the spine; otherwise it is unchanged. Package
 XML, NCX, links, and unrelated files are preserved. Images/fonts retain their
 compressed bytes, including recognized IDPF/Adobe font obfuscation.
 
-DRM/encrypted content, ZIP64, fixed-layout, non-XHTML-spine, and already-converted
-books are rejected. The bounded parser does not repair arbitrary malformed books
-or resolve external DTDs. Common XHTML doctypes and their named entities are
-retained. Keep the original EPUB available when conversion fails.
+Existing KEPUB chapters are validated and keep their original compressed bytes,
+markup, and Kobo reference IDs. Detection uses XHTML content, not filenames.
+Wrapped chapters that need no spans, such as SVG-only covers, are also preserved.
+Chapters without Kobo spans receive them where needed, reusing existing body
+wrappers, including in mixed-format books.
+
+DRM/encrypted content, ZIP64, fixed-layout, and non-XHTML-spine books are rejected.
+The bounded parser does not repair arbitrary malformed books or resolve external
+DTDs. Common XHTML doctypes and their named entities are retained. Keep the
+original EPUB available when conversion fails.
 
 ## Resource limits
 
@@ -141,8 +147,9 @@ retained. Keep the original EPUB available when conversion fails.
 | XHTML markup token             | 64 Ki UTF-16 code units |
 
 Streaming retains the input, metadata, nesting state, and a bounded text/tag
-window without inflating whole chapters. The Blob helper also retains copied
-output chunks. Blob construction, upload buffering, application state, garbage
+window without inflating whole chapters. Chapters are inspected before conversion;
+unprepared chapters are read a second time to add spans. The Blob helper also
+retains copied output chunks. Blob construction, upload buffering, application state, garbage
 collection, and concurrent requests add to peak memory. **The 35 MiB cap is a
 conservative default, not a memory-safety guarantee.**
 
