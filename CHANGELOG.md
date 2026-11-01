@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.1.0 - 2026-10-31
+
 - Extract the converter into the standalone `kepub-edge` project, under MIT.
 - Stream EPUB 2/3 conversion using standard Web APIs, preserving compressed media.
 - Support navigation documents in the spine and prefixed XHTML namespaces.
@@ -10,5 +12,6 @@
 - Provide built ESM, TypeScript declarations, a local Worker example, and
   independent ZIP/XML and package validation.
 
-The initial package version is prepared as `0.1.0`; it has not been published to
-npm. Converter output semantics are version `2`.
+Initial public preview. Converter output semantics are version `2`.
+Real-book coverage, deployed resource benchmarks, and physical Kobo acceptance
+remain incomplete; see `VALIDATION.md`.
