@@ -122,7 +122,9 @@ compressed bytes, including recognized IDPF/Adobe font obfuscation.
 
 Existing KEPUB chapters are validated and keep their original compressed bytes,
 markup, and Kobo reference IDs. Detection uses XHTML content, not filenames.
-Chapters without Kobo spans are converted, including in mixed-format books.
+Wrapped chapters that need no spans, such as SVG-only covers, are also preserved.
+Chapters without Kobo spans receive them where needed, reusing existing body
+wrappers, including in mixed-format books.
 
 DRM/encrypted content, ZIP64, fixed-layout, and non-XHTML-spine books are rejected.
 The bounded parser does not repair arbitrary malformed books or resolve external

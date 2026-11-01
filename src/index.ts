@@ -7,7 +7,7 @@ import {
   readSmallEntry,
 } from "./zip.js"
 import { writeZip, type Replacement } from "./write-zip.js"
-import { hasKoboSpans, transformXhtml } from "./xhtml.js"
+import { inspectXhtml, transformXhtml } from "./xhtml.js"
 
 export { KepubError }
 export type { KepubErrorCode } from "./error.js"
@@ -38,13 +38,13 @@ export async function convertEpubToKepub(
     const entry = archive.byName.get(path)
     if (!entry)
       throw new KepubError("invalid_epub", "A reading document is missing.")
-    replacements.set(path, async () =>
-      // Inspect every chapter fully, even after finding a Kobo span. Ready
-      // chapters retain their compressed bytes, markup, and reference IDs.
-      (await hasKoboSpans(inflateEntry(archive, entry)))
-        ? null
-        : transformXhtml(inflateEntry(archive, entry))
-    )
+    replacements.set(path, async () => {
+      // Validate the entire chapter before reusing its compressed bytes.
+      const { hasKoboSpans, hasKoboWrappers, needsKoboSpans } =
+        await inspectXhtml(inflateEntry(archive, entry))
+      if (hasKoboSpans || (hasKoboWrappers && !needsKoboSpans)) return null
+      return transformXhtml(inflateEntry(archive, entry), !hasKoboWrappers)
+    })
   }
   return writeZip(archive, replacements)
 }

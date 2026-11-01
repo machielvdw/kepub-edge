@@ -7,7 +7,7 @@ import {
   DEFAULT_MAX_BLOB_BYTES,
 } from "../dist/index.js"
 import { parseZip, readSmallEntry } from "../dist/zip.js"
-import { hasKoboSpans, transformXhtml } from "../dist/xhtml.js"
+import { inspectXhtml, transformXhtml } from "../dist/xhtml.js"
 import { makeEpub } from "./fixture.mjs"
 
 async function converted(source) {
@@ -35,6 +35,115 @@ test("preparing an existing KEPUB preserves every entry and its Kobo references"
       entry.name
     )
   }
+})
+
+test("repeated conversion preserves mixed chapters that do not need Kobo spans", async () => {
+  for (const prefix of ["", "x:"]) {
+    const bodies = [
+      `<${prefix}p>Reading text.</${prefix}p>`,
+      '<svg xmlns="http://www.w3.org/2000/svg"><image href="cover.png" width="1" height="1"/></svg>',
+      `<${prefix}pre>Preformatted text.</${prefix}pre>`,
+      "",
+    ]
+    let chapterIndex = 0
+    const source = makeEpub({
+      chapters: bodies,
+      withCover: true,
+      transformChapter: () =>
+        `<${prefix}html xmlns${prefix ? ":x" : ""}="http://www.w3.org/1999/xhtml"><${prefix}head><${prefix}title>Chapter</${prefix}title></${prefix}head><${prefix}body>${bodies[chapterIndex++]}</${prefix}body></${prefix}html>`,
+    })
+    const first = await converted(source)
+    const second = await converted(first.bytes)
+    for (let index = 0; index < bodies.length; index++) {
+      const name = `OEBPS/chapter-${index + 1}.xhtml`
+      const before = first.byName.get(name)
+      const after = second.byName.get(name)
+      assert.ok(before)
+      assert.ok(after)
+      assert.deepEqual(
+        second.bytes.subarray(after.dataStart, after.dataEnd),
+        first.bytes.subarray(before.dataStart, before.dataEnd),
+        `${prefix || "default"} ${name}`
+      )
+      const markup = await text(second, name)
+      assert.equal((markup.match(/id="book-columns"/g) ?? []).length, 1)
+      assert.equal((markup.match(/id="book-inner"/g) ?? []).length, 1)
+      if (index === 0) assert.match(markup, /class="koboSpan"/)
+      else assert.doesNotMatch(markup, /class="koboSpan"/)
+    }
+  }
+})
+
+test("existing Kobo wrappers do not prevent text or images from gaining spans", async () => {
+  for (const prefix of ["", "x:"]) {
+    for (const content of [
+      `<${prefix}p>Still needs conversion.</${prefix}p>`,
+      `<${prefix}img src="cover.png" alt="Cover"/>`,
+      `<${prefix}p> </${prefix}p>`,
+    ]) {
+      const output = await converted(
+        makeEpub({
+          withCover: true,
+          transformChapter: () =>
+            `<${prefix}html xmlns${prefix ? ":x" : ""}="http://www.w3.org/1999/xhtml"><${prefix}head><${prefix}title>Chapter</${prefix}title></${prefix}head><${prefix}body><${prefix}div id="book-columns"><${prefix}div id="book-inner">${content}</${prefix}div></${prefix}div></${prefix}body></${prefix}html>`,
+        })
+      )
+      const markup = await text(output, "OEBPS/chapter-1.xhtml")
+      assert.equal((markup.match(/id="book-columns"/g) ?? []).length, 1)
+      assert.equal((markup.match(/id="book-inner"/g) ?? []).length, 1)
+      assert.match(markup, /class="koboSpan"/)
+    }
+  }
+})
+
+test("wrapper detection requires the complete XHTML body wrapper structure", async () => {
+  const pair = '<x:div id="book-columns"><x:div id="book-inner"/></x:div>'
+  for (const [body, expected] of [
+    [pair, true],
+    [`\n<!-- cover -->${pair}\n`, true],
+    [pair.replace("book-inner", "book-inn&#101;r"), true],
+    [pair.replaceAll("x:div", "foreign:div"), false],
+    [pair.replaceAll("x:div", "x:span"), false],
+    [`<x:section>${pair}</x:section>`, false],
+    [`${pair}<x:p/>`, false],
+    [`${pair}Outside`, false],
+    [
+      pair.replace(
+        '<x:div id="book-inner"/>',
+        '<x:p/><x:div id="book-inner"/>'
+      ),
+      false,
+    ],
+    [
+      pair.replace(
+        '<x:div id="book-inner"/>',
+        '<![CDATA[Outside]]><x:div id="book-inner"/>'
+      ),
+      false,
+    ],
+    [`<!-- ${pair} -->`, false],
+  ]) {
+    const bytes = Buffer.from(
+      `<x:html xmlns:x="http://www.w3.org/1999/xhtml" xmlns:foreign="urn:foreign"><x:body>${body}</x:body></x:html>`
+    )
+    async function* chunks() {
+      for (let at = 0; at < bytes.length; at += 3)
+        yield bytes.subarray(at, at + 3)
+    }
+    assert.equal((await inspectXhtml(chunks())).hasKoboWrappers, expected, body)
+  }
+})
+
+test("Kobo wrappers do not bypass validation of later chapter content", async () => {
+  await assert.rejects(
+    convertEpubToKepubBlob(
+      makeEpub({
+        transformChapter: () =>
+          '<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Chapter</title></head><body><div id="book-columns"><div id="book-inner"><svg xmlns="http://www.w3.org/2000/svg"/></div></div><b>Broken</body></html>',
+      })
+    ),
+    { code: "invalid_epub" }
+  )
 })
 
 test("publisher KEPUB chapters without wrappers are preserved alongside plain chapters", async () => {
@@ -68,7 +177,7 @@ test("Kobo detection parses real class tokens across tiny chunks", async () => {
       for (let at = 0; at < bytes.length; at += 3)
         yield bytes.subarray(at, at + 3)
     }
-    assert.equal(await hasKoboSpans(chunks()), expected, body)
+    assert.equal((await inspectXhtml(chunks())).hasKoboSpans, expected, body)
   }
 })
 

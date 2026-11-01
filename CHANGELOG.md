@@ -3,7 +3,8 @@
 ## Unreleased
 
 - Accept existing KEPUB chapters without adding duplicate wrappers or Kobo spans.
-  Validate their XHTML and preserve compressed content and reference IDs;
+  Validate their XHTML and preserve compressed content and reference IDs,
+  including wrapped SVG-only covers and other chapters that need no spans;
   continue converting plain chapters in mixed-format books.
 - Extract the converter into the standalone `kepub-edge` project, under MIT.
 - Stream EPUB 2/3 conversion using standard Web APIs, preserving compressed media.

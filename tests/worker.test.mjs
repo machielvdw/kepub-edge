@@ -9,8 +9,18 @@ const convert = (body) => fetch(base, { method: "POST", body })
 
 workerTest("standalone Worker preserves existing KEPUB chapters", async () => {
   const source = makeEpub({
-    chapters: ['<span class="koboSpan" id="kobo.1.1">Already prepared.</span>'],
+    chapters: [
+      '<span class="koboSpan" id="kobo.1.1">Already prepared.</span>',
+      "SVG cover",
+    ],
     withCover: true,
+    transformChapter: (xhtml) =>
+      xhtml.includes("<title>Chapter 2</title>")
+        ? xhtml.replace(
+            /<body>.*<\/body>/su,
+            '<body><div id="book-columns"><div id="book-inner"><svg xmlns="http://www.w3.org/2000/svg"><image href="cover.png" width="1" height="1"/></svg></div></div></body>'
+          )
+        : xhtml,
   })
   const response = await convert(source)
   assert.equal(response.status, 200)
