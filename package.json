@@ -34,7 +34,7 @@
   "devDependencies": {
     "prettier": "3.9.10",
     "typescript": "~7.0.2",
-    "wrangler": "4.156.0"
+    "wrangler": "4.157.0"
   },
   "license": "MIT",
   "author": "Machiel (https://github.com/machielvdw)",
