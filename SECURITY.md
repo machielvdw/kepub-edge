@@ -9,9 +9,9 @@ and a minimal reproduction you have permission to share. ZIP parsing, resource
 limit bypasses, and unexpected network/filesystem access are security concerns.
 Ordinary rendering or compatibility problems can use the bug-report template.
 
-During the early preview, fixes target the latest `main` branch. There are no
-long-term support branches or guaranteed response times. Once releases exist,
-this policy will identify supported versions.
+During the early preview, fixes target `main` and the latest published `0.1.x`
+version. Upgrade to the latest patch release for security fixes. There are no
+long-term support branches or guaranteed response times.
 
 Resource limits are defense in depth. Applications should enforce upload limits,
 access controls, and concurrency budgets. Conversion does not sanitize active

@@ -2,7 +2,7 @@
 
 This package is an early preview released under the MIT license. Structural
 tests do not establish universal EPUB compatibility or prove a physical Kobo
-can import the result. npm publication is tracked separately from this repository.
+can import the result. Version `0.1.0` is an initial public preview.
 
 ## Automated evidence
 
